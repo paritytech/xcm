@@ -1,0 +1,94 @@
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+name: Continuous integration
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@6fd3edff6979b79f87531400ad694fb7f2c84b1f # v2.2.1
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --workspace --all-targets
+
+  test:
+    name: Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - macOS-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@6fd3edff6979b79f87531400ad694fb7f2c84b1f # v2.2.1
+
+      - run: rustup target add wasm32-unknown-unknown
+
+      - name: Test no-default-features
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --workspace --no-default-features
+
+      - name: Test default features
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --workspace
+
+      - name: Test xcm-builder
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: -p xcm-builder --all-features
+
+      - name: Test xcm-executor
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: -p xcm-executor --all-features
+
+      - name: Test xcm-simulator-example
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: -p xcm-simulator-example --all-features
+
+  fmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+      - run: rustup component add rustfmt
+      - uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
