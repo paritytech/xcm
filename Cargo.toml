@@ -4,25 +4,21 @@ description = "The basic XCM datastructures."
 authors.workspace = true
 edition.workspace = true
 version.workspace = true
-
-[workspace.package]
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
-version = "3.0.0"
+license.workspace = true
 
 [dependencies]
-bounded-collections = { version = "0.1.7", default-features = false, features = ["serde"] }
+bounded-collections = { version = "0.1.8", default-features = false, features = ["serde"] }
 derivative = { version = "2.2.0", default-features = false, features = [ "use_core" ] }
 impl-trait-for-tuples = "0.2.2"
 log = { version = "0.4.17", default-features = false }
-parity-scale-codec = { version = "3.4.0", default-features = false, features = [ "derive", "max-encoded-len" ] }
+parity-scale-codec = { version = "3.6.1", default-features = false, features = [ "derive", "max-encoded-len" ] }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive", "serde"] }
-sp-weights = { git = "https://github.com/paritytech/substrate", branch = "master", default-features = false, features = ["serde"] }
+sp-weights = { git = "https://github.com/paritytech/polkadot-sdk", branch = "master", default-features = false, features = ["serde"] }
 serde = { version = "1.0.163", default-features = false, features = ["alloc", "derive"] }
 xcm-procedural = { path = "procedural" }
 
 [dev-dependencies]
-sp-io = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sp-io = { git = "https://github.com/paritytech/polkadot-sdk", branch = "master" }
 hex = "0.4.3"
 hex-literal = "0.4.1"
 
@@ -36,3 +32,24 @@ std = [
 	"serde/std",
 	"sp-weights/std",
 ]
+
+[workspace]
+resolver = "2"
+
+members = [
+	"pallet-xcm",
+	"pallet-xcm-benchmarks",
+	"procedural",
+	"xcm-builder",
+	"xcm-executor",
+	"xcm-executor/integration-tests",
+	"xcm-simulator",
+	"xcm-simulator/example",
+	"xcm-simulator/fuzzer",
+]
+
+[workspace.package]
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+version = "3.0.0"
+license = "GPL-3.0-only"

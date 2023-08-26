@@ -4,37 +4,39 @@ description = "Examples of xcm-simulator usage."
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
+license.workspace = true
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "3.4.0" }
+codec = { package = "parity-scale-codec", version = "3.6.1" }
 honggfuzz = "0.5.55"
 arbitrary = "1.2.0"
 scale-info = { version = "2.5.0", features = ["derive"] }
 
-frame-system = { git = "https://github.com/paritytech/substrate", branch = "master" }
-frame-support = { git = "https://github.com/paritytech/substrate", branch = "master" }
-pallet-balances = { git = "https://github.com/paritytech/substrate", branch = "master" }
-pallet-message-queue = { git = "https://github.com/paritytech/substrate", branch = "master" }
-sp-std = { git = "https://github.com/paritytech/substrate", branch = "master" }
-sp-core = { git = "https://github.com/paritytech/substrate", branch = "master" }
-sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "master" }
-sp-io = { git = "https://github.com/paritytech/substrate", branch = "master" }
+frame-system = { git = "https://github.com/paritytech/polkadot-sdk", branch = "master" }
+frame-support = { git = "https://github.com/paritytech/polkadot-sdk", branch = "master" }
+pallet-balances = { git = "https://github.com/paritytech/polkadot-sdk", branch = "master" }
+pallet-message-queue = { git = "https://github.com/paritytech/polkadot-sdk", branch = "master" }
+sp-std = { git = "https://github.com/paritytech/polkadot-sdk", branch = "master" }
+sp-core = { git = "https://github.com/paritytech/polkadot-sdk", branch = "master" }
+sp-runtime = { git = "https://github.com/paritytech/polkadot-sdk", branch = "master" }
+sp-io = { git = "https://github.com/paritytech/polkadot-sdk", branch = "master" }
+
+polkadot-core-primitives = { git = "https://github.com/paritytech/polkadot-sdk", branch = "master" }
+polkadot-runtime-parachains = { git = "https://github.com/paritytech/polkadot-sdk", branch = "master" }
+polkadot-parachain = { git = "https://github.com/paritytech/polkadot-sdk", branch = "master" }
 
 xcm = { path = "../../" }
 xcm-simulator = { path = "../" }
 xcm-executor = { path = "../../xcm-executor" }
 xcm-builder = { path = "../../xcm-builder" }
 pallet-xcm = { path = "../../pallet-xcm" }
-polkadot-core-primitives = { path = "../../../core-primitives" }
-polkadot-runtime-parachains = { path = "../../../runtime/parachains" }
-polkadot-parachain = { path = "../../../parachain" }
 
 [features]
 runtime-benchmarks = [
-    "pallet-xcm/runtime-benchmarks",
-    "pallet-message-queue/runtime-benchmarks",
-    "xcm-builder/runtime-benchmarks",
-    "frame-support/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
+	"pallet-message-queue/runtime-benchmarks",
+	"pallet-xcm/runtime-benchmarks",
+	"xcm-builder/runtime-benchmarks",
 ]
 
 [[bin]]
