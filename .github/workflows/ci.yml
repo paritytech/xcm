@@ -19,7 +19,7 @@ jobs:
           override: true
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@2656b87321093db1cb55fbd73183d195214fdfd1 # v2.5.0
+        uses: Swatinem/rust-cache@a95ba195448af2da9b00fb742d14ffaaf3c21f43 # v2.7.0
 
       - uses: actions-rs/cargo@v1
         with:
@@ -43,7 +43,7 @@ jobs:
           override: true
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@2656b87321093db1cb55fbd73183d195214fdfd1 # v2.5.0
+        uses: Swatinem/rust-cache@a95ba195448af2da9b00fb742d14ffaaf3c21f43 # v2.7.0
 
       - run: rustup target add wasm32-unknown-unknown
 
