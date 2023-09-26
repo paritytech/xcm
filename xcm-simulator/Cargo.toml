@@ -1,10 +1,10 @@
 [package]
 name = "xcm-simulator"
 description = "Test kit to simulate cross-chain message passing and XCM execution"
-version.workspace = true
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
+version.workspace = true
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.6.1" }
@@ -18,6 +18,6 @@ polkadot-core-primitives = { git = "https://github.com/paritytech/polkadot-sdk",
 polkadot-parachain = { git = "https://github.com/paritytech/polkadot-sdk", branch = "master" }
 polkadot-runtime-parachains = { git = "https://github.com/paritytech/polkadot-sdk", branch = "master" }
 
-xcm = { path = "../" }
-xcm-executor = { path = "../xcm-executor" }
-xcm-builder = { path = "../xcm-builder" }
+xcm = { package = "staging-xcm", path = "../" }
+xcm-executor = { package = "staging-xcm-executor", path = "../xcm-executor" }
+xcm-builder = { package = "staging-xcm-builder", path = "../xcm-builder" }

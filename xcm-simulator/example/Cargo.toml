@@ -26,10 +26,10 @@ polkadot-core-primitives = { git = "https://github.com/paritytech/polkadot-sdk",
 polkadot-runtime-parachains = { git = "https://github.com/paritytech/polkadot-sdk", branch = "master" }
 polkadot-parachain = { git = "https://github.com/paritytech/polkadot-sdk", branch = "master" }
 
-xcm = { path = "../../" }
+xcm = { package = "staging-xcm", path = "../../" }
+xcm-builder = { package = "staging-xcm-builder", path = "../../xcm-builder" }
+xcm-executor = { package = "staging-xcm-executor", path = "../../xcm-executor" }
 xcm-simulator = { path = "../" }
-xcm-executor = { path = "../../xcm-executor" }
-xcm-builder = { path = "../../xcm-builder" }
 pallet-xcm = { path = "../../pallet-xcm" }
 
 [features]
@@ -41,8 +41,9 @@ runtime-benchmarks = [
 	"pallet-message-queue/runtime-benchmarks",
 	"pallet-uniques/runtime-benchmarks",
 	"pallet-xcm/runtime-benchmarks",
-	"polkadot-parachain/runtime-benchmarks",
+	"polkadot-parachain-primitives/runtime-benchmarks",
 	"polkadot-runtime-parachains/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks",
 	"xcm-builder/runtime-benchmarks",
 	"xcm-executor/runtime-benchmarks",
 ]
