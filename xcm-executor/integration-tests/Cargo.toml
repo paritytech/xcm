@@ -21,8 +21,8 @@ sp-keyring = { git = "https://github.com/paritytech/polkadot-sdk", branch = "mas
 sp-runtime = { git = "https://github.com/paritytech/polkadot-sdk", branch = "master", default-features = false }
 sp-state-machine = { git = "https://github.com/paritytech/polkadot-sdk", branch = "master" }
 sp-tracing = { git = "https://github.com/paritytech/polkadot-sdk", branch = "master" }
-xcm = { path = "../..", default-features = false }
-xcm-executor = { path = ".." }
+xcm = { package = "staging-xcm", path = "../..", default-features = false }
+xcm-executor = { package = "staging-xcm-executor", path = ".." }
 
 [features]
 default = ["std"]
