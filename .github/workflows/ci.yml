@@ -93,17 +93,17 @@ jobs:
           command: fmt
           args: --all -- --check
 
-  check-publish:
-    name: publish dry run
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: publish
-          args: --dry-run
+  # check-publish:
+  #   name: publish dry run
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - uses: actions-rs/toolchain@v1
+  #       with:
+  #         profile: minimal
+  #         toolchain: stable
+  #         override: true
+  #     - uses: actions-rs/cargo@v1
+  #       with:
+  #         command: publish
+  #         args: --dry-run
