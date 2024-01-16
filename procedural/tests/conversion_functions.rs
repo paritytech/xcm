@@ -14,22 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-use frame_support::traits::ContainsPair;
-use xcm::latest::{Asset, Location};
+use xcm::v2::prelude::*;
 
-/// Filters assets/location pairs.
-///
-/// Can be amalgamated into tuples. If any item returns `true`, it short-circuits, else `false` is
-/// returned.
-#[deprecated = "Use `frame_support::traits::ContainsPair<Asset, Location>` instead"]
-pub trait FilterAssetLocation {
-	/// A filter to distinguish between asset/location pairs.
-	fn contains(asset: &Asset, origin: &Location) -> bool;
-}
-
-#[allow(deprecated)]
-impl<T: ContainsPair<Asset, Location>> FilterAssetLocation for T {
-	fn contains(asset: &Asset, origin: &Location) -> bool {
-		T::contains(asset, origin)
-	}
+#[test]
+fn slice_syntax_in_v2_works() {
+	let old_junctions = Junctions::X2(Parachain(1), PalletInstance(1));
+	let new_junctions = Junctions::from([Parachain(1), PalletInstance(1)]);
+	assert_eq!(old_junctions, new_junctions);
 }

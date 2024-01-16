@@ -17,31 +17,22 @@
 //! Cross-Consensus Message format asset data structures.
 //!
 //! This encompasses four types for representing assets:
-//! - `MultiAsset`: A description of a single asset, either an instance of a non-fungible or some
-//!   amount of a fungible.
-//! - `MultiAssets`: A collection of `MultiAsset`s. These are stored in a `Vec` and sorted with
-//!   fungibles first.
+//! - `Asset`: A description of a single asset, either an instance of a non-fungible or some amount
+//!   of a fungible.
+//! - `Assets`: A collection of `Asset`s. These are stored in a `Vec` and sorted with fungibles
+//!   first.
 //! - `Wild`: A single asset wildcard, this can either be "all" assets, or all assets of a specific
 //!   kind.
-//! - `MultiAssetFilter`: A combination of `Wild` and `MultiAssets` designed for efficiently
-//!   filtering an XCM holding account.
+//! - `AssetFilter`: A combination of `Wild` and `Assets` designed for efficiently filtering an XCM
+//!   holding account.
 
-use super::{InteriorMultiLocation, MultiLocation};
-use crate::{
-	v2::{
-		AssetId as OldAssetId, AssetInstance as OldAssetInstance, Fungibility as OldFungibility,
-		MultiAsset as OldMultiAsset, MultiAssetFilter as OldMultiAssetFilter,
-		MultiAssets as OldMultiAssets, WildFungibility as OldWildFungibility,
-		WildMultiAsset as OldWildMultiAsset,
-	},
-	v4::{
-		Asset as NewMultiAsset, AssetFilter as NewMultiAssetFilter, AssetId as NewAssetId,
-		AssetInstance as NewAssetInstance, Assets as NewMultiAssets, Fungibility as NewFungibility,
-		WildAsset as NewWildMultiAsset, WildFungibility as NewWildFungibility,
-	},
+use super::{InteriorLocation, Location, Reanchorable};
+use crate::v3::{
+	AssetId as OldAssetId, AssetInstance as OldAssetInstance, Fungibility as OldFungibility,
+	MultiAsset as OldAsset, MultiAssetFilter as OldAssetFilter, MultiAssets as OldAssets,
+	WildFungibility as OldWildFungibility, WildMultiAsset as OldWildAsset,
 };
 use alloc::{vec, vec::Vec};
-use bounded_collections::{BoundedVec, ConstU32};
 use core::{
 	cmp::Ordering,
 	convert::{TryFrom, TryInto},
@@ -54,8 +45,6 @@ use scale_info::TypeInfo;
 	Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, Debug, TypeInfo, MaxEncodedLen,
 )]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
-#[scale_info(replace_segment("staging_xcm", "xcm"))]
 pub enum AssetInstance {
 	/// Undefined - used if the non-fungible asset class has only one instance.
 	Undefined,
@@ -81,22 +70,6 @@ impl TryFrom<OldAssetInstance> for AssetInstance {
 	type Error = ();
 	fn try_from(value: OldAssetInstance) -> Result<Self, Self::Error> {
 		use OldAssetInstance::*;
-		Ok(match value {
-			Undefined => Self::Undefined,
-			Index(n) => Self::Index(n),
-			Array4(n) => Self::Array4(n),
-			Array8(n) => Self::Array8(n),
-			Array16(n) => Self::Array16(n),
-			Array32(n) => Self::Array32(n),
-			Blob(_) => return Err(()),
-		})
-	}
-}
-
-impl TryFrom<NewAssetInstance> for AssetInstance {
-	type Error = ();
-	fn try_from(value: NewAssetInstance) -> Result<Self, Self::Error> {
-		use NewAssetInstance::*;
 		Ok(match value {
 			Undefined => Self::Undefined,
 			Index(n) => Self::Index(n),
@@ -266,8 +239,6 @@ impl TryFrom<AssetInstance> for u128 {
 /// instance.
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Encode, TypeInfo, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
-#[scale_info(replace_segment("staging_xcm", "xcm"))]
 pub enum Fungibility {
 	/// A fungible asset; we record a number of units, as a `u128` in the inner item.
 	Fungible(#[codec(compact)] u128),
@@ -332,24 +303,11 @@ impl TryFrom<OldFungibility> for Fungibility {
 	}
 }
 
-impl TryFrom<NewFungibility> for Fungibility {
-	type Error = ();
-	fn try_from(value: NewFungibility) -> Result<Self, Self::Error> {
-		use NewFungibility::*;
-		Ok(match value {
-			Fungible(n) => Self::Fungible(n),
-			NonFungible(i) => Self::NonFungible(i.try_into()?),
-		})
-	}
-}
-
 /// Classification of whether an asset is fungible or not.
 #[derive(
 	Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Encode, Decode, TypeInfo, MaxEncodedLen,
 )]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
-#[scale_info(replace_segment("staging_xcm", "xcm"))]
 pub enum WildFungibility {
 	/// The asset is fungible.
 	Fungible,
@@ -368,41 +326,14 @@ impl TryFrom<OldWildFungibility> for WildFungibility {
 	}
 }
 
-impl TryFrom<NewWildFungibility> for WildFungibility {
-	type Error = ();
-	fn try_from(value: NewWildFungibility) -> Result<Self, Self::Error> {
-		use NewWildFungibility::*;
-		Ok(match value {
-			Fungible => Self::Fungible,
-			NonFungible => Self::NonFungible,
-		})
-	}
-}
-
-/// Classification of an asset being concrete or abstract.
-#[derive(
-	Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Encode, Decode, TypeInfo, MaxEncodedLen,
-)]
+/// Location to identify an asset.
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
-#[scale_info(replace_segment("staging_xcm", "xcm"))]
-pub enum AssetId {
-	/// A specific location identifying an asset.
-	Concrete(MultiLocation),
-	/// An abstract location; this is a name which may mean different specific locations on
-	/// different chains at different times.
-	Abstract([u8; 32]),
-}
+pub struct AssetId(pub Location);
 
-impl<T: Into<MultiLocation>> From<T> for AssetId {
+impl<T: Into<Location>> From<T> for AssetId {
 	fn from(x: T) -> Self {
-		Self::Concrete(x.into())
-	}
-}
-
-impl From<[u8; 32]> for AssetId {
-	fn from(x: [u8; 32]) -> Self {
-		Self::Abstract(x)
+		Self(x.into())
 	}
 }
 
@@ -411,65 +342,54 @@ impl TryFrom<OldAssetId> for AssetId {
 	fn try_from(old: OldAssetId) -> Result<Self, ()> {
 		use OldAssetId::*;
 		Ok(match old {
-			Concrete(l) => Self::Concrete(l.try_into()?),
-			Abstract(v) if v.len() <= 32 => {
-				let mut r = [0u8; 32];
-				r[..v.len()].copy_from_slice(&v[..]);
-				Self::Abstract(r)
-			},
-			_ => return Err(()),
+			Concrete(l) => Self(l.try_into()?),
+			Abstract(_) => return Err(()),
 		})
 	}
 }
 
-impl TryFrom<NewAssetId> for AssetId {
-	type Error = ();
-	fn try_from(new: NewAssetId) -> Result<Self, Self::Error> {
-		Ok(Self::Concrete(new.0.try_into()?))
+impl AssetId {
+	/// Prepend a `Location` to an asset id, giving it a new root location.
+	pub fn prepend_with(&mut self, prepend: &Location) -> Result<(), ()> {
+		self.0.prepend_with(prepend.clone()).map_err(|_| ())?;
+		Ok(())
+	}
+
+	/// Use the value of `self` along with a `fun` fungibility specifier to create the corresponding
+	/// `Asset` value.
+	pub fn into_asset(self, fun: Fungibility) -> Asset {
+		Asset { fun, id: self }
+	}
+
+	/// Use the value of `self` along with a `fun` fungibility specifier to create the corresponding
+	/// `WildAsset` wildcard (`AllOf`) value.
+	pub fn into_wild(self, fun: WildFungibility) -> WildAsset {
+		WildAsset::AllOf { fun, id: self }
 	}
 }
 
-impl AssetId {
-	/// Prepend a `MultiLocation` to a concrete asset, giving it a new root location.
-	pub fn prepend_with(&mut self, prepend: &MultiLocation) -> Result<(), ()> {
-		if let AssetId::Concrete(ref mut l) = self {
-			l.prepend_with(*prepend).map_err(|_| ())?;
-		}
-		Ok(())
-	}
+impl Reanchorable for AssetId {
+	type Error = ();
 
 	/// Mutate the asset to represent the same value from the perspective of a new `target`
 	/// location. The local chain's location is provided in `context`.
-	pub fn reanchor(
-		&mut self,
-		target: &MultiLocation,
-		context: InteriorMultiLocation,
-	) -> Result<(), ()> {
-		if let AssetId::Concrete(ref mut l) = self {
-			l.reanchor(target, context)?;
-		}
+	fn reanchor(&mut self, target: &Location, context: &InteriorLocation) -> Result<(), ()> {
+		self.0.reanchor(target, context)?;
 		Ok(())
 	}
 
-	/// Use the value of `self` along with a `fun` fungibility specifier to create the corresponding
-	/// `MultiAsset` value.
-	pub fn into_multiasset(self, fun: Fungibility) -> MultiAsset {
-		MultiAsset { fun, id: self }
-	}
-
-	/// Use the value of `self` along with a `fun` fungibility specifier to create the corresponding
-	/// `WildMultiAsset` wildcard (`AllOf`) value.
-	pub fn into_wild(self, fun: WildFungibility) -> WildMultiAsset {
-		WildMultiAsset::AllOf { fun, id: self }
+	fn reanchored(mut self, target: &Location, context: &InteriorLocation) -> Result<Self, ()> {
+		match self.reanchor(target, context) {
+			Ok(()) => Ok(self),
+			Err(()) => Err(()),
+		}
 	}
 }
 
 /// Either an amount of a single fungible asset, or a single well-identified non-fungible asset.
 #[derive(Clone, Eq, PartialEq, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
-#[scale_info(replace_segment("staging_xcm", "xcm"))]
-pub struct MultiAsset {
+pub struct Asset {
 	/// The overall asset identity (aka *class*, in the case of a non-fungible).
 	pub id: AssetId,
 	/// The fungibility of the asset, which contains either the amount (in the case of a fungible
@@ -477,13 +397,13 @@ pub struct MultiAsset {
 	pub fun: Fungibility,
 }
 
-impl PartialOrd for MultiAsset {
+impl PartialOrd for Asset {
 	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
 		Some(self.cmp(other))
 	}
 }
 
-impl Ord for MultiAsset {
+impl Ord for Asset {
 	fn cmp(&self, other: &Self) -> Ordering {
 		match (&self.fun, &other.fun) {
 			(Fungibility::Fungible(..), Fungibility::NonFungible(..)) => Ordering::Less,
@@ -493,13 +413,13 @@ impl Ord for MultiAsset {
 	}
 }
 
-impl<A: Into<AssetId>, B: Into<Fungibility>> From<(A, B)> for MultiAsset {
-	fn from((id, fun): (A, B)) -> MultiAsset {
-		MultiAsset { fun: fun.into(), id: id.into() }
+impl<A: Into<AssetId>, B: Into<Fungibility>> From<(A, B)> for Asset {
+	fn from((id, fun): (A, B)) -> Asset {
+		Asset { fun: fun.into(), id: id.into() }
 	}
 }
 
-impl MultiAsset {
+impl Asset {
 	pub fn is_fungible(&self, maybe_id: Option<AssetId>) -> bool {
 		use Fungibility::*;
 		matches!(self.fun, Fungible(..)) && maybe_id.map_or(true, |i| i == self.id)
@@ -510,34 +430,13 @@ impl MultiAsset {
 		matches!(self.fun, NonFungible(..)) && maybe_id.map_or(true, |i| i == self.id)
 	}
 
-	/// Prepend a `MultiLocation` to a concrete asset, giving it a new root location.
-	pub fn prepend_with(&mut self, prepend: &MultiLocation) -> Result<(), ()> {
+	/// Prepend a `Location` to a concrete asset, giving it a new root location.
+	pub fn prepend_with(&mut self, prepend: &Location) -> Result<(), ()> {
 		self.id.prepend_with(prepend)
 	}
 
-	/// Mutate the location of the asset identifier if concrete, giving it the same location
-	/// relative to a `target` context. The local context is provided as `context`.
-	pub fn reanchor(
-		&mut self,
-		target: &MultiLocation,
-		context: InteriorMultiLocation,
-	) -> Result<(), ()> {
-		self.id.reanchor(target, context)
-	}
-
-	/// Mutate the location of the asset identifier if concrete, giving it the same location
-	/// relative to a `target` context. The local context is provided as `context`.
-	pub fn reanchored(
-		mut self,
-		target: &MultiLocation,
-		context: InteriorMultiLocation,
-	) -> Result<Self, ()> {
-		self.id.reanchor(target, context)?;
-		Ok(self)
-	}
-
 	/// Returns true if `self` is a super-set of the given `inner` asset.
-	pub fn contains(&self, inner: &MultiAsset) -> bool {
+	pub fn contains(&self, inner: &Asset) -> bool {
 		use Fungibility::*;
 		if self.id == inner.id {
 			match (&self.fun, &inner.fun) {
@@ -550,96 +449,91 @@ impl MultiAsset {
 	}
 }
 
-impl TryFrom<OldMultiAsset> for MultiAsset {
+impl Reanchorable for Asset {
 	type Error = ();
-	fn try_from(old: OldMultiAsset) -> Result<Self, ()> {
+
+	/// Mutate the location of the asset identifier if concrete, giving it the same location
+	/// relative to a `target` context. The local context is provided as `context`.
+	fn reanchor(&mut self, target: &Location, context: &InteriorLocation) -> Result<(), ()> {
+		self.id.reanchor(target, context)
+	}
+
+	/// Mutate the location of the asset identifier if concrete, giving it the same location
+	/// relative to a `target` context. The local context is provided as `context`.
+	fn reanchored(mut self, target: &Location, context: &InteriorLocation) -> Result<Self, ()> {
+		self.id.reanchor(target, context)?;
+		Ok(self)
+	}
+}
+
+impl TryFrom<OldAsset> for Asset {
+	type Error = ();
+	fn try_from(old: OldAsset) -> Result<Self, ()> {
 		Ok(Self { id: old.id.try_into()?, fun: old.fun.try_into()? })
 	}
 }
 
-impl TryFrom<NewMultiAsset> for MultiAsset {
-	type Error = ();
-	fn try_from(new: NewMultiAsset) -> Result<Self, Self::Error> {
-		Ok(Self { id: new.id.try_into()?, fun: new.fun.try_into()? })
-	}
-}
-
-/// A `Vec` of `MultiAsset`s.
+/// A `Vec` of `Asset`s.
 ///
 /// There are a number of invariants which the construction and mutation functions must ensure are
 /// maintained:
 /// - It may contain no items of duplicate asset class;
 /// - All items must be ordered;
-/// - The number of items should grow no larger than `MAX_ITEMS_IN_MULTIASSETS`.
+/// - The number of items should grow no larger than `MAX_ITEMS_IN_ASSETS`.
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Encode, TypeInfo, Default)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
-#[scale_info(replace_segment("staging_xcm", "xcm"))]
-pub struct MultiAssets(Vec<MultiAsset>);
+pub struct Assets(Vec<Asset>);
 
-/// Maximum number of items in a single `MultiAssets` value that can be decoded.
-pub const MAX_ITEMS_IN_MULTIASSETS: usize = 20;
+/// Maximum number of items we expect in a single `Assets` value. Note this is not (yet)
+/// enforced, and just serves to provide a sensible `max_encoded_len` for `Assets`.
+pub const MAX_ITEMS_IN_ASSETS: usize = 20;
 
-impl MaxEncodedLen for MultiAssets {
+impl MaxEncodedLen for Assets {
 	fn max_encoded_len() -> usize {
-		MultiAsset::max_encoded_len() * MAX_ITEMS_IN_MULTIASSETS
+		Asset::max_encoded_len() * MAX_ITEMS_IN_ASSETS
 	}
 }
 
-impl Decode for MultiAssets {
-	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
-		let bounded_instructions =
-			BoundedVec::<MultiAsset, ConstU32<{ MAX_ITEMS_IN_MULTIASSETS as u32 }>>::decode(input)?;
-		Self::from_sorted_and_deduplicated(bounded_instructions.into_inner())
+impl Decode for Assets {
+	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, parity_scale_codec::Error> {
+		Self::from_sorted_and_deduplicated(Vec::<Asset>::decode(input)?)
 			.map_err(|()| "Out of order".into())
 	}
 }
 
-impl TryFrom<OldMultiAssets> for MultiAssets {
+impl TryFrom<OldAssets> for Assets {
 	type Error = ();
-	fn try_from(old: OldMultiAssets) -> Result<Self, ()> {
+	fn try_from(old: OldAssets) -> Result<Self, ()> {
 		let v = old
-			.drain()
-			.into_iter()
-			.map(MultiAsset::try_from)
-			.collect::<Result<Vec<_>, ()>>()?;
-		Ok(MultiAssets(v))
-	}
-}
-
-impl TryFrom<NewMultiAssets> for MultiAssets {
-	type Error = ();
-	fn try_from(new: NewMultiAssets) -> Result<Self, Self::Error> {
-		let v = new
 			.into_inner()
 			.into_iter()
-			.map(MultiAsset::try_from)
+			.map(Asset::try_from)
 			.collect::<Result<Vec<_>, ()>>()?;
-		Ok(MultiAssets(v))
+		Ok(Assets(v))
 	}
 }
 
-impl From<Vec<MultiAsset>> for MultiAssets {
-	fn from(mut assets: Vec<MultiAsset>) -> Self {
+impl From<Vec<Asset>> for Assets {
+	fn from(mut assets: Vec<Asset>) -> Self {
 		let mut res = Vec::with_capacity(assets.len());
 		if !assets.is_empty() {
 			assets.sort();
 			let mut iter = assets.into_iter();
 			if let Some(first) = iter.next() {
-				let last = iter.fold(first, |a, b| -> MultiAsset {
+				let last = iter.fold(first, |a, b| -> Asset {
 					match (a, b) {
 						(
-							MultiAsset { fun: Fungibility::Fungible(a_amount), id: a_id },
-							MultiAsset { fun: Fungibility::Fungible(b_amount), id: b_id },
-						) if a_id == b_id => MultiAsset {
+							Asset { fun: Fungibility::Fungible(a_amount), id: a_id },
+							Asset { fun: Fungibility::Fungible(b_amount), id: b_id },
+						) if a_id == b_id => Asset {
 							id: a_id,
 							fun: Fungibility::Fungible(a_amount.saturating_add(b_amount)),
 						},
 						(
-							MultiAsset { fun: Fungibility::NonFungible(a_instance), id: a_id },
-							MultiAsset { fun: Fungibility::NonFungible(b_instance), id: b_id },
+							Asset { fun: Fungibility::NonFungible(a_instance), id: a_id },
+							Asset { fun: Fungibility::NonFungible(b_instance), id: b_id },
 						) if a_id == b_id && a_instance == b_instance =>
-							MultiAsset { fun: Fungibility::NonFungible(a_instance), id: a_id },
+							Asset { fun: Fungibility::NonFungible(a_instance), id: a_id },
 						(to_push, to_remember) => {
 							res.push(to_push);
 							to_remember
@@ -653,29 +547,29 @@ impl From<Vec<MultiAsset>> for MultiAssets {
 	}
 }
 
-impl<T: Into<MultiAsset>> From<T> for MultiAssets {
+impl<T: Into<Asset>> From<T> for Assets {
 	fn from(x: T) -> Self {
 		Self(vec![x.into()])
 	}
 }
 
-impl MultiAssets {
+impl Assets {
 	/// A new (empty) value.
 	pub fn new() -> Self {
 		Self(Vec::new())
 	}
 
-	/// Create a new instance of `MultiAssets` from a `Vec<MultiAsset>` whose contents are sorted
+	/// Create a new instance of `Assets` from a `Vec<Asset>` whose contents are sorted
 	/// and which contain no duplicates.
 	///
 	/// Returns `Ok` if the operation succeeds and `Err` if `r` is out of order or had duplicates.
 	/// If you can't guarantee that `r` is sorted and deduplicated, then use
-	/// `From::<Vec<MultiAsset>>::from` which is infallible.
-	pub fn from_sorted_and_deduplicated(r: Vec<MultiAsset>) -> Result<Self, ()> {
+	/// `From::<Vec<Asset>>::from` which is infallible.
+	pub fn from_sorted_and_deduplicated(r: Vec<Asset>) -> Result<Self, ()> {
 		if r.is_empty() {
 			return Ok(Self(Vec::new()))
 		}
-		r.iter().skip(1).try_fold(&r[0], |a, b| -> Result<&MultiAsset, ()> {
+		r.iter().skip(1).try_fold(&r[0], |a, b| -> Result<&Asset, ()> {
 			if a.id < b.id || a < b && (a.is_non_fungible(None) || b.is_non_fungible(None)) {
 				Ok(b)
 			} else {
@@ -685,17 +579,17 @@ impl MultiAssets {
 		Ok(Self(r))
 	}
 
-	/// Create a new instance of `MultiAssets` from a `Vec<MultiAsset>` whose contents are sorted
+	/// Create a new instance of `Assets` from a `Vec<Asset>` whose contents are sorted
 	/// and which contain no duplicates.
 	///
 	/// In release mode, this skips any checks to ensure that `r` is correct, making it a
 	/// negligible-cost operation. Generally though you should avoid using it unless you have a
 	/// strict proof that `r` is valid.
 	#[cfg(test)]
-	pub fn from_sorted_and_deduplicated_skip_checks(r: Vec<MultiAsset>) -> Self {
+	pub fn from_sorted_and_deduplicated_skip_checks(r: Vec<Asset>) -> Self {
 		Self::from_sorted_and_deduplicated(r).expect("Invalid input r is not sorted/deduped")
 	}
-	/// Create a new instance of `MultiAssets` from a `Vec<MultiAsset>` whose contents are sorted
+	/// Create a new instance of `Assets` from a `Vec<Asset>` whose contents are sorted
 	/// and which contain no duplicates.
 	///
 	/// In release mode, this skips any checks to ensure that `r` is correct, making it a
@@ -704,13 +598,13 @@ impl MultiAssets {
 	///
 	/// In test mode, this checks anyway and panics on fail.
 	#[cfg(not(test))]
-	pub fn from_sorted_and_deduplicated_skip_checks(r: Vec<MultiAsset>) -> Self {
+	pub fn from_sorted_and_deduplicated_skip_checks(r: Vec<Asset>) -> Self {
 		Self(r)
 	}
 
 	/// Add some asset onto the list, saturating. This is quite a laborious operation since it
 	/// maintains the ordering.
-	pub fn push(&mut self, a: MultiAsset) {
+	pub fn push(&mut self, a: Asset) {
 		for asset in self.0.iter_mut().filter(|x| x.id == a.id) {
 			match (&a.fun, &mut asset.fun) {
 				(Fungibility::Fungible(amount), Fungibility::Fungible(balance)) => {
@@ -733,23 +627,23 @@ impl MultiAssets {
 	}
 
 	/// Returns true if `self` is a super-set of the given `inner` asset.
-	pub fn contains(&self, inner: &MultiAsset) -> bool {
+	pub fn contains(&self, inner: &Asset) -> bool {
 		self.0.iter().any(|i| i.contains(inner))
 	}
 
 	/// Consume `self` and return the inner vec.
 	#[deprecated = "Use `into_inner()` instead"]
-	pub fn drain(self) -> Vec<MultiAsset> {
+	pub fn drain(self) -> Vec<Asset> {
 		self.0
 	}
 
 	/// Consume `self` and return the inner vec.
-	pub fn into_inner(self) -> Vec<MultiAsset> {
+	pub fn into_inner(self) -> Vec<Asset> {
 		self.0
 	}
 
 	/// Return a reference to the inner vec.
-	pub fn inner(&self) -> &Vec<MultiAsset> {
+	pub fn inner(&self) -> &Vec<Asset> {
 		&self.0
 	}
 
@@ -758,37 +652,38 @@ impl MultiAssets {
 		self.0.len()
 	}
 
-	/// Prepend a `MultiLocation` to any concrete asset items, giving it a new root location.
-	pub fn prepend_with(&mut self, prefix: &MultiLocation) -> Result<(), ()> {
+	/// Prepend a `Location` to any concrete asset items, giving it a new root location.
+	pub fn prepend_with(&mut self, prefix: &Location) -> Result<(), ()> {
 		self.0.iter_mut().try_for_each(|i| i.prepend_with(prefix))
 	}
 
-	/// Mutate the location of the asset identifier if concrete, giving it the same location
-	/// relative to a `target` context. The local context is provided as `context`.
-	///
-	/// This will also re-sort the inner assets to preserve ordering guarantees.
-	pub fn reanchor(
-		&mut self,
-		target: &MultiLocation,
-		context: InteriorMultiLocation,
-	) -> Result<(), ()> {
+	/// Return a reference to an item at a specific index or `None` if it doesn't exist.
+	pub fn get(&self, index: usize) -> Option<&Asset> {
+		self.0.get(index)
+	}
+}
+
+impl Reanchorable for Assets {
+	type Error = ();
+
+	fn reanchor(&mut self, target: &Location, context: &InteriorLocation) -> Result<(), ()> {
 		self.0.iter_mut().try_for_each(|i| i.reanchor(target, context))?;
 		self.0.sort();
 		Ok(())
 	}
 
-	/// Return a reference to an item at a specific index or `None` if it doesn't exist.
-	pub fn get(&self, index: usize) -> Option<&MultiAsset> {
-		self.0.get(index)
+	fn reanchored(mut self, target: &Location, context: &InteriorLocation) -> Result<Self, ()> {
+		match self.reanchor(target, context) {
+			Ok(()) => Ok(self),
+			Err(()) => Err(()),
+		}
 	}
 }
 
 /// A wildcard representing a set of assets.
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
-#[scale_info(replace_segment("staging_xcm", "xcm"))]
-pub enum WildMultiAsset {
+pub enum WildAsset {
 	/// All assets in Holding.
 	All,
 	/// All assets in Holding of a given fungibility and ID.
@@ -806,48 +701,24 @@ pub enum WildMultiAsset {
 	},
 }
 
-impl TryFrom<OldWildMultiAsset> for WildMultiAsset {
+impl TryFrom<OldWildAsset> for WildAsset {
 	type Error = ();
-	fn try_from(old: OldWildMultiAsset) -> Result<WildMultiAsset, ()> {
-		use OldWildMultiAsset::*;
+	fn try_from(old: OldWildAsset) -> Result<WildAsset, ()> {
+		use OldWildAsset::*;
 		Ok(match old {
 			AllOf { id, fun } => Self::AllOf { id: id.try_into()?, fun: fun.try_into()? },
 			All => Self::All,
-		})
-	}
-}
-
-impl TryFrom<NewWildMultiAsset> for WildMultiAsset {
-	type Error = ();
-	fn try_from(new: NewWildMultiAsset) -> Result<Self, ()> {
-		use NewWildMultiAsset::*;
-		Ok(match new {
-			AllOf { id, fun } => Self::AllOf { id: id.try_into()?, fun: fun.try_into()? },
 			AllOfCounted { id, fun, count } =>
 				Self::AllOfCounted { id: id.try_into()?, fun: fun.try_into()?, count },
-			All => Self::All,
 			AllCounted(count) => Self::AllCounted(count),
 		})
 	}
 }
 
-impl TryFrom<(OldWildMultiAsset, u32)> for WildMultiAsset {
-	type Error = ();
-	fn try_from(old: (OldWildMultiAsset, u32)) -> Result<WildMultiAsset, ()> {
-		use OldWildMultiAsset::*;
-		let count = old.1;
-		Ok(match old.0 {
-			AllOf { id, fun } =>
-				Self::AllOfCounted { id: id.try_into()?, fun: fun.try_into()?, count },
-			All => Self::AllCounted(count),
-		})
-	}
-}
-
-impl WildMultiAsset {
+impl WildAsset {
 	/// Returns true if `self` is a super-set of the given `inner` asset.
-	pub fn contains(&self, inner: &MultiAsset) -> bool {
-		use WildMultiAsset::*;
+	pub fn contains(&self, inner: &Asset) -> bool {
+		use WildAsset::*;
 		match self {
 			AllOfCounted { count: 0, .. } | AllCounted(0) => false,
 			AllOf { fun, id } | AllOfCounted { id, fun, .. } =>
@@ -861,18 +732,14 @@ impl WildMultiAsset {
 	/// Note that for `Counted` variants of wildcards, then it will disregard the count except for
 	/// always returning `false` when equal to 0.
 	#[deprecated = "Use `contains` instead"]
-	pub fn matches(&self, inner: &MultiAsset) -> bool {
+	pub fn matches(&self, inner: &Asset) -> bool {
 		self.contains(inner)
 	}
 
 	/// Mutate the asset to represent the same value from the perspective of a new `target`
 	/// location. The local chain's location is provided in `context`.
-	pub fn reanchor(
-		&mut self,
-		target: &MultiLocation,
-		context: InteriorMultiLocation,
-	) -> Result<(), ()> {
-		use WildMultiAsset::*;
+	pub fn reanchor(&mut self, target: &Location, context: &InteriorLocation) -> Result<(), ()> {
+		use WildAsset::*;
 		match self {
 			AllOf { ref mut id, .. } | AllOfCounted { ref mut id, .. } =>
 				id.reanchor(target, context),
@@ -882,7 +749,7 @@ impl WildMultiAsset {
 
 	/// Maximum count of assets allowed to match, if any.
 	pub fn count(&self) -> Option<u32> {
-		use WildMultiAsset::*;
+		use WildAsset::*;
 		match self {
 			AllOfCounted { count, .. } | AllCounted(count) => Some(*count),
 			All | AllOf { .. } => None,
@@ -897,7 +764,7 @@ impl WildMultiAsset {
 	/// Consume self and return the equivalent version but counted and with the `count` set to the
 	/// given parameter.
 	pub fn counted(self, count: u32) -> Self {
-		use WildMultiAsset::*;
+		use WildAsset::*;
 		match self {
 			AllOfCounted { fun, id, .. } | AllOf { fun, id } => AllOfCounted { fun, id, count },
 			All | AllCounted(_) => AllCounted(count),
@@ -905,76 +772,70 @@ impl WildMultiAsset {
 	}
 }
 
-impl<A: Into<AssetId>, B: Into<WildFungibility>> From<(A, B)> for WildMultiAsset {
-	fn from((id, fun): (A, B)) -> WildMultiAsset {
-		WildMultiAsset::AllOf { fun: fun.into(), id: id.into() }
+impl<A: Into<AssetId>, B: Into<WildFungibility>> From<(A, B)> for WildAsset {
+	fn from((id, fun): (A, B)) -> WildAsset {
+		WildAsset::AllOf { fun: fun.into(), id: id.into() }
 	}
 }
 
-/// `MultiAsset` collection, defined either by a number of `MultiAssets` or a single wildcard.
+/// `Asset` collection, defined either by a number of `Assets` or a single wildcard.
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
-#[scale_info(replace_segment("staging_xcm", "xcm"))]
-pub enum MultiAssetFilter {
-	/// Specify the filter as being everything contained by the given `MultiAssets` inner.
-	Definite(MultiAssets),
-	/// Specify the filter as the given `WildMultiAsset` wildcard.
-	Wild(WildMultiAsset),
+pub enum AssetFilter {
+	/// Specify the filter as being everything contained by the given `Assets` inner.
+	Definite(Assets),
+	/// Specify the filter as the given `WildAsset` wildcard.
+	Wild(WildAsset),
 }
 
-impl<T: Into<WildMultiAsset>> From<T> for MultiAssetFilter {
+impl<T: Into<WildAsset>> From<T> for AssetFilter {
 	fn from(x: T) -> Self {
 		Self::Wild(x.into())
 	}
 }
 
-impl From<MultiAsset> for MultiAssetFilter {
-	fn from(x: MultiAsset) -> Self {
+impl From<Asset> for AssetFilter {
+	fn from(x: Asset) -> Self {
 		Self::Definite(vec![x].into())
 	}
 }
 
-impl From<Vec<MultiAsset>> for MultiAssetFilter {
-	fn from(x: Vec<MultiAsset>) -> Self {
+impl From<Vec<Asset>> for AssetFilter {
+	fn from(x: Vec<Asset>) -> Self {
 		Self::Definite(x.into())
 	}
 }
 
-impl From<MultiAssets> for MultiAssetFilter {
-	fn from(x: MultiAssets) -> Self {
+impl From<Assets> for AssetFilter {
+	fn from(x: Assets) -> Self {
 		Self::Definite(x)
 	}
 }
 
-impl MultiAssetFilter {
+impl AssetFilter {
 	/// Returns true if `inner` would be matched by `self`.
 	///
 	/// Note that for `Counted` variants of wildcards, then it will disregard the count except for
 	/// always returning `false` when equal to 0.
-	pub fn matches(&self, inner: &MultiAsset) -> bool {
+	pub fn matches(&self, inner: &Asset) -> bool {
 		match self {
-			MultiAssetFilter::Definite(ref assets) => assets.contains(inner),
-			MultiAssetFilter::Wild(ref wild) => wild.contains(inner),
+			AssetFilter::Definite(ref assets) => assets.contains(inner),
+			AssetFilter::Wild(ref wild) => wild.contains(inner),
 		}
 	}
 
 	/// Mutate the location of the asset identifier if concrete, giving it the same location
 	/// relative to a `target` context. The local context is provided as `context`.
-	pub fn reanchor(
-		&mut self,
-		target: &MultiLocation,
-		context: InteriorMultiLocation,
-	) -> Result<(), ()> {
+	pub fn reanchor(&mut self, target: &Location, context: &InteriorLocation) -> Result<(), ()> {
 		match self {
-			MultiAssetFilter::Definite(ref mut assets) => assets.reanchor(target, context),
-			MultiAssetFilter::Wild(ref mut wild) => wild.reanchor(target, context),
+			AssetFilter::Definite(ref mut assets) => assets.reanchor(target, context),
+			AssetFilter::Wild(ref mut wild) => wild.reanchor(target, context),
 		}
 	}
 
 	/// Maximum count of assets it is possible to match, if known.
 	pub fn count(&self) -> Option<u32> {
-		use MultiAssetFilter::*;
+		use AssetFilter::*;
 		match self {
 			Definite(x) => Some(x.len() as u32),
 			Wild(x) => x.count(),
@@ -983,7 +844,7 @@ impl MultiAssetFilter {
 
 	/// Explicit limit placed on the number of items, if any.
 	pub fn limit(&self) -> Option<u32> {
-		use MultiAssetFilter::*;
+		use AssetFilter::*;
 		match self {
 			Definite(_) => None,
 			Wild(x) => x.limit(),
@@ -991,36 +852,12 @@ impl MultiAssetFilter {
 	}
 }
 
-impl TryFrom<OldMultiAssetFilter> for MultiAssetFilter {
+impl TryFrom<OldAssetFilter> for AssetFilter {
 	type Error = ();
-	fn try_from(old: OldMultiAssetFilter) -> Result<MultiAssetFilter, ()> {
+	fn try_from(old: OldAssetFilter) -> Result<AssetFilter, ()> {
 		Ok(match old {
-			OldMultiAssetFilter::Definite(x) => Self::Definite(x.try_into()?),
-			OldMultiAssetFilter::Wild(x) => Self::Wild(x.try_into()?),
-		})
-	}
-}
-
-impl TryFrom<NewMultiAssetFilter> for MultiAssetFilter {
-	type Error = ();
-	fn try_from(new: NewMultiAssetFilter) -> Result<MultiAssetFilter, Self::Error> {
-		use NewMultiAssetFilter::*;
-		Ok(match new {
-			Definite(x) => Self::Definite(x.try_into()?),
-			Wild(x) => Self::Wild(x.try_into()?),
-		})
-	}
-}
-
-impl TryFrom<(OldMultiAssetFilter, u32)> for MultiAssetFilter {
-	type Error = ();
-	fn try_from(old: (OldMultiAssetFilter, u32)) -> Result<MultiAssetFilter, ()> {
-		let count = old.1;
-		Ok(match old.0 {
-			OldMultiAssetFilter::Definite(x) if count >= x.len() as u32 =>
-				Self::Definite(x.try_into()?),
-			OldMultiAssetFilter::Wild(x) => Self::Wild((x, count).try_into()?),
-			_ => return Err(()),
+			OldAssetFilter::Definite(x) => Self::Definite(x.try_into()?),
+			OldAssetFilter::Wild(x) => Self::Wild(x.try_into()?),
 		})
 	}
 }
@@ -1031,7 +868,7 @@ mod tests {
 
 	#[test]
 	fn conversion_works() {
-		let _: MultiAssets = (Here, 1u128).into();
+		let _: Assets = (Here, 1u128).into();
 	}
 
 	#[test]
@@ -1040,118 +877,39 @@ mod tests {
 		use alloc::vec;
 
 		let empty = vec![];
-		let r = MultiAssets::from_sorted_and_deduplicated(empty);
-		assert_eq!(r, Ok(MultiAssets(vec![])));
+		let r = Assets::from_sorted_and_deduplicated(empty);
+		assert_eq!(r, Ok(Assets(vec![])));
 
 		let dup_fun = vec![(Here, 100).into(), (Here, 10).into()];
-		let r = MultiAssets::from_sorted_and_deduplicated(dup_fun);
+		let r = Assets::from_sorted_and_deduplicated(dup_fun);
 		assert!(r.is_err());
 
 		let dup_nft = vec![(Here, *b"notgood!").into(), (Here, *b"notgood!").into()];
-		let r = MultiAssets::from_sorted_and_deduplicated(dup_nft);
+		let r = Assets::from_sorted_and_deduplicated(dup_nft);
 		assert!(r.is_err());
 
 		let good_fun = vec![(Here, 10).into(), (Parent, 10).into()];
-		let r = MultiAssets::from_sorted_and_deduplicated(good_fun.clone());
-		assert_eq!(r, Ok(MultiAssets(good_fun)));
+		let r = Assets::from_sorted_and_deduplicated(good_fun.clone());
+		assert_eq!(r, Ok(Assets(good_fun)));
 
 		let bad_fun = vec![(Parent, 10).into(), (Here, 10).into()];
-		let r = MultiAssets::from_sorted_and_deduplicated(bad_fun);
-		assert!(r.is_err());
-
-		let good_abstract_fun = vec![(Here, 100).into(), ([0u8; 32], 10).into()];
-		let r = MultiAssets::from_sorted_and_deduplicated(good_abstract_fun.clone());
-		assert_eq!(r, Ok(MultiAssets(good_abstract_fun)));
-
-		let bad_abstract_fun = vec![([0u8; 32], 10).into(), (Here, 10).into()];
-		let r = MultiAssets::from_sorted_and_deduplicated(bad_abstract_fun);
+		let r = Assets::from_sorted_and_deduplicated(bad_fun);
 		assert!(r.is_err());
 
 		let good_nft = vec![(Here, ()).into(), (Here, *b"good").into()];
-		let r = MultiAssets::from_sorted_and_deduplicated(good_nft.clone());
-		assert_eq!(r, Ok(MultiAssets(good_nft)));
+		let r = Assets::from_sorted_and_deduplicated(good_nft.clone());
+		assert_eq!(r, Ok(Assets(good_nft)));
 
 		let bad_nft = vec![(Here, *b"bad!").into(), (Here, ()).into()];
-		let r = MultiAssets::from_sorted_and_deduplicated(bad_nft);
-		assert!(r.is_err());
-
-		let good_abstract_nft = vec![(Here, ()).into(), ([0u8; 32], ()).into()];
-		let r = MultiAssets::from_sorted_and_deduplicated(good_abstract_nft.clone());
-		assert_eq!(r, Ok(MultiAssets(good_abstract_nft)));
-
-		let bad_abstract_nft = vec![([0u8; 32], ()).into(), (Here, ()).into()];
-		let r = MultiAssets::from_sorted_and_deduplicated(bad_abstract_nft);
+		let r = Assets::from_sorted_and_deduplicated(bad_nft);
 		assert!(r.is_err());
 
 		let mixed_good = vec![(Here, 10).into(), (Here, *b"good").into()];
-		let r = MultiAssets::from_sorted_and_deduplicated(mixed_good.clone());
-		assert_eq!(r, Ok(MultiAssets(mixed_good)));
+		let r = Assets::from_sorted_and_deduplicated(mixed_good.clone());
+		assert_eq!(r, Ok(Assets(mixed_good)));
 
 		let mixed_bad = vec![(Here, *b"bad!").into(), (Here, 10).into()];
-		let r = MultiAssets::from_sorted_and_deduplicated(mixed_bad);
+		let r = Assets::from_sorted_and_deduplicated(mixed_bad);
 		assert!(r.is_err());
-	}
-
-	#[test]
-	fn reanchor_preserves_sorting() {
-		use super::*;
-		use alloc::vec;
-
-		let reanchor_context = X1(Parachain(2000));
-		let dest = MultiLocation::new(1, Here);
-
-		let asset_1: MultiAsset =
-			(MultiLocation::new(0, X2(PalletInstance(50), GeneralIndex(1))), 10).into();
-		let mut asset_1_reanchored = asset_1.clone();
-		assert!(asset_1_reanchored.reanchor(&dest, reanchor_context).is_ok());
-		assert_eq!(
-			asset_1_reanchored,
-			(MultiLocation::new(0, X3(Parachain(2000), PalletInstance(50), GeneralIndex(1))), 10)
-				.into()
-		);
-
-		let asset_2: MultiAsset = (MultiLocation::new(1, Here), 10).into();
-		let mut asset_2_reanchored = asset_2.clone();
-		assert!(asset_2_reanchored.reanchor(&dest, reanchor_context).is_ok());
-		assert_eq!(asset_2_reanchored, (MultiLocation::new(0, Here), 10).into());
-
-		let asset_3: MultiAsset = (MultiLocation::new(1, X1(Parachain(1000))), 10).into();
-		let mut asset_3_reanchored = asset_3.clone();
-		assert!(asset_3_reanchored.reanchor(&dest, reanchor_context).is_ok());
-		assert_eq!(asset_3_reanchored, (MultiLocation::new(0, X1(Parachain(1000))), 10).into());
-
-		let mut assets: MultiAssets =
-			vec![asset_1.clone(), asset_2.clone(), asset_3.clone()].into();
-		assert_eq!(assets.clone(), vec![asset_1.clone(), asset_2.clone(), asset_3.clone()].into());
-
-		assert!(assets.reanchor(&dest, reanchor_context).is_ok());
-		assert_eq!(assets, vec![asset_2_reanchored, asset_3_reanchored, asset_1_reanchored].into());
-	}
-
-	#[test]
-	fn decoding_respects_limit() {
-		use super::*;
-
-		// Having lots of one asset will work since they are deduplicated
-		let lots_of_one_asset: MultiAssets =
-			vec![(GeneralIndex(1), 1u128).into(); MAX_ITEMS_IN_MULTIASSETS + 1].into();
-		let encoded = lots_of_one_asset.encode();
-		assert!(MultiAssets::decode(&mut &encoded[..]).is_ok());
-
-		// Fewer assets than the limit works
-		let mut few_assets: MultiAssets = Vec::new().into();
-		for i in 0..MAX_ITEMS_IN_MULTIASSETS {
-			few_assets.push((GeneralIndex(i as u128), 1u128).into());
-		}
-		let encoded = few_assets.encode();
-		assert!(MultiAssets::decode(&mut &encoded[..]).is_ok());
-
-		// Having lots of different assets will not work
-		let mut too_many_different_assets: MultiAssets = Vec::new().into();
-		for i in 0..MAX_ITEMS_IN_MULTIASSETS + 1 {
-			too_many_different_assets.push((GeneralIndex(i as u128), 1u128).into());
-		}
-		let encoded = too_many_different_assets.encode();
-		assert!(MultiAssets::decode(&mut &encoded[..]).is_err());
 	}
 }
