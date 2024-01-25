@@ -1,5 +1,6 @@
 [package]
 name = "pallet-xcm"
+description = "A pallet for handling XCM programs."
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,8 +9,8 @@ version.workspace = true
 [dependencies]
 bounded-collections = { version = "0.1.8", default-features = false }
 codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["derive"] }
-scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
-serde = { version = "1.0.188", optional = true, features = ["derive"] }
+scale-info = { version = "2.10.0", default-features = false, features = ["derive"] }
+serde = { version = "1.0.195", optional = true, features = ["derive"] }
 log = { version = "0.4.17", default-features = false }
 
 frame-benchmarking = { git = "https://github.com/paritytech/polkadot-sdk", branch = "master", default-features = false, optional = true }
@@ -22,27 +23,31 @@ sp-std = { git = "https://github.com/paritytech/polkadot-sdk", branch = "master"
 
 xcm = { package = "staging-xcm", path = "..", default-features = false }
 xcm-executor = { package = "staging-xcm-executor", path = "../xcm-executor", default-features = false }
+xcm-builder = { package = "staging-xcm-builder", path = "../xcm-builder", default-features = false }
 
 [dev-dependencies]
 pallet-balances = { git = "https://github.com/paritytech/polkadot-sdk", branch = "master" }
 polkadot-runtime-parachains = { git = "https://github.com/paritytech/polkadot-sdk", branch = "master" }
 polkadot-parachain-primitives = { git = "https://github.com/paritytech/polkadot-sdk", branch = "master" }
-xcm-builder = { package = "staging-xcm-builder", path = "../xcm-builder" }
+pallet-assets = { git = "https://github.com/paritytech/polkadot-sdk", branch = "master" }
 
 [features]
-default = [ "std" ]
+default = ["std"]
 std = [
 	"bounded-collections/std",
 	"codec/std",
 	"frame-benchmarking?/std",
 	"frame-support/std",
 	"frame-system/std",
+	"log/std",
+	"pallet-balances/std",
 	"scale-info/std",
 	"serde",
 	"sp-core/std",
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"xcm-builder/std",
 	"xcm-executor/std",
 	"xcm/std",
 ]
@@ -50,6 +55,7 @@ runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
+	"pallet-assets/runtime-benchmarks",
 	"pallet-balances/runtime-benchmarks",
 	"polkadot-parachain-primitives/runtime-benchmarks",
 	"polkadot-runtime-parachains/runtime-benchmarks",
@@ -60,6 +66,7 @@ runtime-benchmarks = [
 try-runtime = [
 	"frame-support/try-runtime",
 	"frame-system/try-runtime",
+	"pallet-assets/try-runtime",
 	"pallet-balances/try-runtime",
 	"polkadot-runtime-parachains/try-runtime",
 	"sp-runtime/try-runtime",
