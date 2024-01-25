@@ -6,9 +6,6 @@ edition.workspace = true
 version.workspace = true
 license.workspace = true
 
-[lints]
-workspace = true
-
 [dependencies]
 array-bytes = "6.1"
 bounded-collections = { version = "0.1.9", default-features = false, features = ["serde"] }
@@ -40,7 +37,7 @@ std = [
 	"serde/std",
 	"sp-weights/std",
 ]
-json-schema = ["bounded-collections/json-schema", "dep:schemars", "sp-weights/json-schema"]
+json-schema = ["bounded-collections/json-schema", "dep:schemars"]
 
 [workspace]
 resolver = "2"
